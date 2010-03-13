@@ -3,7 +3,7 @@
 ;; Copyright 2007, 2009, 2010 Kevin Ryde
 
 ;; Author: Kevin Ryde <user42@zip.com.au>
-;; Version: 5
+;; Version: 6
 ;; Keywords: files
 ;; URL: http://user42.tuxfamily.org/ffap-mml/index.html
 ;; EmacsWiki: FindFileAtPoint
@@ -49,25 +49,42 @@
 ;; Version 3 - new home page
 ;; Version 4 - set ffap-string-at-point variable
 ;; Version 5 - undo defadvice on unload-feature
+;; Version 6 - speedup in big buffer
+;;           - namespace clean thing-at-point 'ffap-mml-filename
 
 ;;; Code:
 
 ;;;###autoload (eval-after-load "ffap" '(require 'ffap-mml))
 
-(put 'mml-filename 'bounds-of-thing-at-point
+;; for `ad-find-advice' macro in ffap-mml-unload-function when running
+;; uncompiled (don't unload 'advice before ffap-mml-unload-function)
+(require 'advice)
+
+(put 'ffap-mml-filename 'bounds-of-thing-at-point
      (lambda ()
-       ;; This pattern is pretty slack: a backslash can escape a " in a
-       ;; quoted string, and > is allowed in a quoted string, and an
-       ;; unquoted value ends with a space, etc.
+       ;; The pattern is pretty slack.  `mml-insert-tag' puts strings with
+       ;; dubious chars through `prin1', so backslash escapes a ", and > is
+       ;; allowed in a quoted string, and an unquoted value ends with a
+       ;; space, etc.
+       ;;
        ;; The optional match of the <#/part> ending makes the thing-at-point
        ;; work with point within that ending.
-       (and (thing-at-point-looking-at "\
-<#\\(part\\|mml\\)[^>]*filename=\"?\\([^\">]+\\)\\([^>]*>\n*<#/part>\\)?")
+       ;;
+       ;; Restricting to the point line plus one above and one below keeps
+       ;; down the searching done by thing-at-point-looking-at in its
+       ;; workaround for re-search-backward not matching across point.
+       ;; Without this it can take a few seconds in a big buffer.
+       ;;
+       (and (save-restriction
+              (narrow-to-region (save-excursion (forward-line -1) (point))
+                                (save-excursion (forward-line 2) (point)))
+              (thing-at-point-looking-at "\
+<#\\(part\\|mml\\)[^>]*filename=\"?\\([^\">]+\\)\\([^>]*>\n*<#/part>\\)?"))
             (cons (match-beginning 2) (match-end 2)))))
 
 (defadvice ffap-string-at-point (around ffap-mml activate)
   "Recognise message MML attached files with point at start of line."
-  (unless (let ((bounds (bounds-of-thing-at-point 'mml-filename)))
+  (unless (let ((bounds (bounds-of-thing-at-point 'ffap-mml-filename)))
             (when bounds
               (setq ffap-string-at-point-region (list (car bounds)
                                                       (cdr bounds)))
@@ -78,6 +95,8 @@
     ad-do-it))
 
 (defun ffap-mml-unload-function ()
+  "Remove defadvice and thing-at-point bits."
+  (put 'ffap-mml-filename 'bounds-of-thing-at-point nil)
   (when (ad-find-advice 'ffap-string-at-point 'around 'ffap-mml)
     (ad-remove-advice   'ffap-string-at-point 'around 'ffap-mml)
     (ad-activate        'ffap-string-at-point))
