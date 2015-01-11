@@ -1,10 +1,10 @@
 ;;; ffap-mml.el --- find Gnus message MML attached file at point
 
-;; Copyright 2007, 2009, 2010 Kevin Ryde
+;; Copyright 2007, 2009, 2010, 2011, 2012, 2013 Kevin Ryde
 
 ;; Author: Kevin Ryde <user42@zip.com.au>
-;; Version: 7
-;; Keywords: files
+;; Version: 8
+;; Keywords: files, ffap, mml, gnus
 ;; URL: http://user42.tuxfamily.org/ffap-mml/index.html
 ;; EmacsWiki: FindFileAtPoint
 
@@ -26,7 +26,7 @@
 
 ;; This spot of code to lets M-x ffap find a file attached as a Gnus message
 ;; meta-language (MML) part, as per `C-c C-a' (mml-attach-part) when
-;; composing a message.  Eg.
+;; composing a message.
 ;;
 ;;     <#part type="text/plain" filename="/foo/bar.txt" disposition=attachment>
 ;;     <#/part>
@@ -56,14 +56,19 @@
 ;;           - namespace clean thing-at-point 'ffap-mml-filename
 ;; Version 7 - thing-at-point now includes the quotes
 ;;           - unescape with `read'
+;; Version 8 - use `ignore-errors'
 
 ;;; Code:
 
 ;;;###autoload (eval-after-load "ffap" '(require 'ffap-mml))
 
-;; for `ad-find-advice' macro in ffap-mml-unload-function when running
-;; uncompiled (don't unload 'advice before ffap-mml-unload-function)
+;; Explicit dependency on advice.el since `ffap-mml-unload-function' needs
+;; `ad-find-advice' macro when running not byte compiled, and that macro is
+;; not autoloaded.
 (require 'advice)
+
+(eval-when-compile
+  (require 'cl)) ;; for `ignore-errors'
 
 (require 'ffap)
 
@@ -134,9 +139,8 @@ then return nil."
       (let* ((filename (buffer-substring-no-properties (car bounds)
                                                        (cdr bounds))))
         (if (string-match "\\`\"" filename)
-            (setq filename (condition-case nil
-                               (read filename)
-                             (error nil))))
+            (setq filename (ignore-errors
+                             (read filename))))
         (when filename
           (setq ffap-string-at-point-region (list (car bounds)
                                                   (cdr bounds)))
@@ -149,12 +153,15 @@ then return nil."
     ad-do-it))
 
 (defun ffap-mml-unload-function ()
-  "Remove ffap-mml defadvice and thing-at-point."
+  "Remove ffap-mml defadvice and `thing-at-point'.
+This is called by `unload-feature'."
   (put 'ffap-mml-filename 'bounds-of-thing-at-point nil)
   (when (ad-find-advice 'ffap-string-at-point 'around 'ffap-mml)
     (ad-remove-advice   'ffap-string-at-point 'around 'ffap-mml)
     (ad-activate        'ffap-string-at-point))
   nil) ;; and do normal unload-feature actions too
+
+;; LocalWords: el txt mml
 
 (provide 'ffap-mml)
 
