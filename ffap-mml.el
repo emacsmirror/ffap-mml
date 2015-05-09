@@ -1,9 +1,9 @@
 ;;; ffap-mml.el --- find Gnus message MML attached file at point
 
-;; Copyright 2007, 2009, 2010, 2011, 2012, 2013 Kevin Ryde
+;; Copyright 2007, 2009, 2010, 2011, 2012, 2013, 2015 Kevin Ryde
 
-;; Author: Kevin Ryde <user42@zip.com.au>
-;; Version: 8
+;; Author: Kevin Ryde <user42_kevin@yahoo.com.au>
+;; Version: 10
 ;; Keywords: files, ffap, mml, gnus
 ;; URL: http://user42.tuxfamily.org/ffap-mml/index.html
 ;; EmacsWiki: FindFileAtPoint
@@ -42,8 +42,8 @@
 ;;
 ;;     (eval-after-load "ffap" '(require 'ffap-mml))
 ;;
-;; There's an autoload cookie for this if you know how to use
-;; `update-file-autoloads' and friends.
+;; There's an autoload cookie for this if you install by
+;; `M-x package-install' or know `update-file-autoloads' and friends.
 
 ;;; History:
 ;; 
@@ -57,6 +57,8 @@
 ;; Version 7 - thing-at-point now includes the quotes
 ;;           - unescape with `read'
 ;; Version 8 - use `ignore-errors'
+;; Version 9 - cl macros only when needed
+;; Version 10 - quieten the byte compiler on `thing-at-point-looking-at'
 
 ;;; Code:
 
@@ -67,11 +69,19 @@
 ;; not autoloaded.
 (require 'advice)
 
-(eval-when-compile
-  (require 'cl)) ;; for `ignore-errors'
-
 (require 'ffap)
 
+;; Have `thing-at-point-looking-at' to quieten the byte compiler.
+;; At runtime the `bounds-of-thing-at-point' handler is called by
+;; thingatpt.el so it exists then.
+(eval-when-compile
+  (require 'thingatpt))
+
+(eval-when-compile
+  (unless (fboundp 'ignore-errors)
+    (require 'cl))) ;; for `ignore-errors'
+
+;;-----------------------------------------------------------------------------
 
 ;; `mml-insert-tag' puts strings with unusual chars through `prin1'.  The
 ;; regexp matches a string escaped like that, then `ffap-mml-at-point' puts
@@ -161,7 +171,7 @@ This is called by `unload-feature'."
     (ad-activate        'ffap-string-at-point))
   nil) ;; and do normal unload-feature actions too
 
-;; LocalWords: el txt mml
+;; LocalWords: el txt mml foo
 
 (provide 'ffap-mml)
 
